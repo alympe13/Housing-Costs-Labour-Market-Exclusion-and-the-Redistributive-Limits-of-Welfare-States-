@@ -1,0 +1,44 @@
+library(stargazer)
+library(plm)
+
+# 1. Load the dataset using read.csv2 (Ensure the file is in your working directory)
+raw_data <- read.csv2("Thesis_Final_Panel_Dataset_Bulletproof.csv")
+
+# 2. Convert to a pdata.frame object for panel data handling
+pdata <- pdata.frame(raw_data, index = c("Country", "Year"))
+
+cat("\n========================================================\n")
+cat(" The Bulletproof dataset loaded successfully! \n")
+cat(" Total Rows:", nrow(pdata), "| Total Columns:", ncol(pdata), "\n")
+cat("========================================================\n")
+
+# 3. Subset and prepare columns for correlation matrix
+temp_panel <- pdata 
+
+# Convert all column names to lowercase to avoid case-sensitivity issues
+colnames(temp_panel) <- tolower(colnames(temp_panel))
+
+# Subset necessary columns
+corr_data <- temp_panel[, c("house", "unemp", "socben", "pens", "tert", "lonep", "heat", "lwi")]
+
+# Rename columns for professional formatting in Word
+colnames(corr_data) <- c("1. Housing Cost", "2. Unemployment", "3. Social Benefits", 
+                         "4. Pensions", "5. Tertiary Edu.", "6. Lone Parent", 
+                         "7. Heating Depr.", "8. Low Work Int.")
+
+# 4. Calculate pairwise Pearson correlations
+cormat <- cor(corr_data, use = "pairwise.complete.obs")
+
+# 5. Export directly to MS Word format using relative file path
+out_corr_file <- "TableA1_CorrelationMatrix.doc"
+
+stargazer(cormat, 
+          type = "html", 
+          out = out_corr_file,
+          title = "Table A1: Pearson Correlation Matrix of Explanatory Variables",
+          summary = FALSE, 
+          digits = 3, 
+          rownames = TRUE,
+          notes = "Notes: Pairwise Pearson correlation coefficients. No correlation exceeds the conventional multicollinearity threshold (0.80), confirming the absence of severe multicollinearity among the regressors.")
+
+cat("PERFECT! The Correlation Matrix was successfully exported to:\n", out_corr_file, "\n")

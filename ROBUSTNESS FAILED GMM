@@ -1,0 +1,30 @@
+library(plm)
+
+# Note: This script contains the initial attempt to estimate a two-step System GMM dynamic panel model.
+# As documented in the manuscript (Limitations section), this approach was abandoned due to severe 
+# instrument proliferation (N=32 countries vs. T=21 years), which resulted in singular covariance 
+# matrices and weakened Sargan/Hansen specification tests (p=1.000).
+
+# 1. REDUCED-FORM SYSTEM GMM FOR GINI
+# effect = "twoways" (for country & time effects), model = "twosteps", transformation = "ld" (System GMM)
+gmm_gini <- pgmm(Gini ~ lag(Gini, 1) + House + Unemp + SocBen + Pens | 
+                   lag(Gini, 2:3) + lag(House, 2:3) + lag(Unemp, 2:3) + lag(SocBen, 2:3) + lag(Pens, 2:3), 
+                 data = pdata, 
+                 effect = "twoways", 
+                 model = "twosteps", 
+                 transformation = "ld")
+
+cat("\n--- REDUCED-FORM SYSTEM GMM: GINI (Note: Suffers from instrument proliferation) ---\n")
+summary(gmm_gini, robust = TRUE)
+
+
+# 2. REDUCED-FORM SYSTEM GMM FOR S80/S20
+gmm_s8020 <- pgmm(S8020 ~ lag(S8020, 1) + House + Unemp + SocBen + Pens | 
+                    lag(S8020, 2:3) + lag(House, 2:3) + lag(Unemp, 2:3) + lag(SocBen, 2:3) + lag(Pens, 2:3), 
+                  data = pdata, 
+                  effect = "twoways", 
+                  model = "twosteps", 
+                  transformation = "ld")
+
+cat("\n--- REDUCED-FORM SYSTEM GMM: S80/S20 (Note: Suffers from instrument proliferation) ---\n")
+summary(gmm_s8020, robust = TRUE)

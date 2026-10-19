@@ -1,0 +1,313 @@
+# ==============================================================================
+# MASTER SCRIPT: THE BULLETPROOF EDITION
+# ==============================================================================
+
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(data.table)
+
+# --- 0. HELPER FUNCTIONS ---
+as_num <- function(x) {
+  x <- str_replace_all(as.character(x), ",", ".")
+  suppressWarnings(as.numeric(str_replace_all(x, "[^0-9.\\-]", "")))
+}
+clean_id <- function(x) { str_remove(str_replace_all(as.character(x), "\\s+", ""), "^0+") }
+
+# Absolutely safe column reading
+get_col <- function(df, col_name) {
+  if (col_name %in% names(df)) {
+    return(as_num(df[[col_name]]))
+  } else {
+    return(rep(NA_real_, nrow(df)))
+  }
+}
+
+w_mean <- function(x, w) {
+  df <- data.frame(x = as.numeric(x), w = as.numeric(w)) %>% filter(!is.na(x), !is.na(w), w > 0)
+  if(nrow(df) == 0) return(NA)
+  return(sum(df$x * w) / sum(w))
+}
+
+weighted_median <- function(x, w) {
+  df <- data.frame(x, w) %>% filter(!is.na(x), !is.na(w), w > 0) %>% arrange(x)
+  if (nrow(df) == 0) return(NA)
+  cum_w <- cumsum(df$w) / sum(df$w)
+  return(df$x[which.max(cum_w >= 0.5)])
+}
+
+gini_w <- function(x, w) {
+  df <- data.frame(x, w) %>% filter(!is.na(x), !is.na(w), w > 0) %>% arrange(x)
+  if (nrow(df) < 2) return(NA)
+  cum_w <- cumsum(df$w) / sum(df$w)
+  cum_xw <- cumsum(df$x * df$w) / sum(df$x * df$w)
+  return(max(0, 1 - sum((cum_w - c(0, cum_w[-length(cum_w)])) * (cum_xw + c(0, cum_xw[-length(cum_xw)])))))
+}
+
+calc_s80s20 <- function(x, w) {
+  df <- data.frame(x, w) %>% filter(!is.na(x), !is.na(w), w > 0) %>% arrange(x)
+  if (nrow(df) < 5) return(NA)
+  cum_w <- cumsum(df$w) / sum(df$w)
+  q20 <- sum(df$x[cum_w <= 0.2] * df$w[cum_w <= 0.2])
+  q80 <- sum(df$x[cum_w >= 0.8] * df$w[cum_w >= 0.8])
+  return(ifelse(q20 > 0, q80 / q20, NA))
+}
+
+# --- 1. SETTINGS / CONFIGURATION ---
+countries <- c("AT", "BE", "BG", "CH", "CY","CZ", "DE", "DK", "EE", "EL", "ES", "FI", "FR", "HR", "HU", "IE", "IS", "IT", "LT", "LU", "LV", "MT", "NL", "NO", "PL", "PT", "RO", "RS", "SE", "SI", "SK", "UK") 
+base_path <- "C:/Users/alexi/OneDrive/Υπολογιστής/ΔΙΔΑΚΤΟΡΙΚΟ/Δεδομένα/Cross4/"
+years <- 2004:2024
+master_panel_list <- list()
+
+# --- 2. MAIN EXECUTION LOOP ---
+for (cntry in countries) {
+  cat("\n", rep("=", 90), "\nCountry:", cntry, "\n")
+  tert_rate <- NA
+  lwi_rate <- NA
+  for (year in years) {
+    yy <- substr(year, 3, 4)
+    folder <- paste0(base_path, cntry, "/", year)
+    files <- c(f_d=paste0(folder, "/UDB_c", cntry, yy, "D.csv"), f_h=paste0(folder, "/UDB_c", cntry, yy, "H.csv"), f_r=paste0(folder, "/UDB_c", cntry, yy, "R.csv"), f_p=paste0(folder, "/UDB_c", cntry, yy, "P.csv"))
+    
+    if (!all(file.exists(files))) {
+      cat(sprintf("  %d | [Skipped - Missing files]\n", year))
+      next
+    }
+    
+    # --- FAST READING + COLUMN CLEANING ---
+    h <- fread(files["f_h"], colClasses = "character", data.table = FALSE) %>% rename_all(tolower) %>% mutate(across(everything(), trimws))
+    r <- fread(files["f_r"], colClasses = "character", data.table = FALSE) %>% rename_all(tolower) %>% mutate(across(everything(), trimws))
+    p <- fread(files["f_p"], colClasses = "character", data.table = FALSE) %>% rename_all(tolower) %>% mutate(across(everything(), trimws))
+    
+    names(h) <- trimws(names(h))
+    names(r) <- trimws(names(r))
+    names(p) <- trimws(names(p))
+    
+    r_hid <- if("rx030" %in% names(r)) "rx030" else "rb040"
+    
+    # --- PREPARE R-FILE ---
+    rb080_col <- if("rb080_val" %in% names(r)) "rb080_val" else if("rb080" %in% names(r)) "rb080" else NA
+    r <- r %>% mutate(
+      rb030 = clean_id(rb030), 
+      hid = clean_id(!!sym(r_hid)), 
+      w_ind = as_num(rb050)
+    )
+    
+    # [RESTORE: Malta's SDC Fix from v8.1]
+    # Malta in 2020-2021 reported age categories (1, 2, 3...) instead of birth years!
+    if (cntry == "MT" && year %in% c(2020, 2021) && !is.na(rb080_col)) {
+      r_age_col <- as_num(r[[rb080_col]])
+      r$age <- dplyr::case_when(
+        r_age_col == 1  ~ 2,   r_age_col == 2  ~ 7,   r_age_col == 3  ~ 12,
+        r_age_col == 4  ~ 17,  r_age_col == 5  ~ 22,  r_age_col == 6  ~ 27,
+        r_age_col == 7  ~ 32,  r_age_col == 8  ~ 37,  r_age_col == 9  ~ 42,
+        r_age_col == 10 ~ 47,  r_age_col == 11 ~ 52,  r_age_col == 12 ~ 57,
+        r_age_col == 13 ~ 62,  r_age_col == 14 ~ 67,  r_age_col == 15 ~ 72,
+        r_age_col == 16 ~ 77,  r_age_col == 17 ~ 82, TRUE ~ NA_real_
+      )
+    } else {
+      # Calculate birth year for all other countries/years
+      yob <- as_num(if(!is.na(rb080_col)) r[[rb080_col]] else NA)
+      yob <- ifelse(!is.na(yob) & yob < 100, ifelse(yob > 10, 1900 + yob, 2000 + yob), yob)
+      
+      # Smart age reading
+      rx_char <- coalesce(if("rx020" %in% names(r)) as.character(r$rx020) else NA, 
+                          if("rx010" %in% names(r)) as.character(r$rx010) else NA)
+      rx_num <- suppressWarnings(as.numeric(str_extract(rx_char, "\\d+")))
+      
+      r$age <- coalesce(year - yob, rx_num)
+      
+      # Old Malta Age Patch (for years it sent "25-29" -> 2529)
+      r$age <- ifelse(!is.na(r$age) & abs(r$age) > 1000, floor(abs(r$age) / 100), r$age)
+    }
+    
+    # --- PREPARE H-FILE ---
+    h_final <- h %>% mutate(
+      hid = clean_id(hb030), 
+      w_hh = as_num(hx040), hx090_val = as_num(hx090), hx050_val = as_num(hx050),
+      # The "Magic" Patch: If hy020 is missing, reconstruct it from hx090 * hx050
+      hy020_val = coalesce(as_num(hy020), hx090_val * hx050_val),
+      hx060_val = as_num(hx060),
+      heat_val = ifelse(as_num(hh050) == 2, 1, 0),
+      h_all = coalesce(get_col(., "hy070g"), get_col(., "hy070n"), 0),
+      h_cost = as_num(hh070) * 12,
+      h_over = case_when((h_cost - h_all) <= 0 ~ 0, (hy020_val - h_all) <= 0 ~ 1, ((h_cost - h_all) / (hy020_val - h_all)) > 0.4 ~ 1, TRUE ~ 0),
+      benefits = rowSums(across(any_of(c("hy050g", "hy050n", "hy060g", "hy060n", "hy070g", "hy070n", "hy080g", "hy080n")), ~ as_num(.)), na.rm=TRUE)
+    )
+    
+    # --- PREPARE P-FILE ---
+    p$pb030 <- clean_id(p$pb030) 
+    p$pl031_val <- coalesce(get_col(p, "pl031"), get_col(p, "pl030"))
+    
+    # --- ISCED reading ---
+    safe_edu <- function(df, col) {
+      val <- get_col(df, col)
+      if (is.null(val)) return(NA)
+      
+      # Clean and convert to numeric
+      val_num <- suppressWarnings(as.numeric(as.character(val)))
+      
+      # Remove -1, -2, -3, -7 (missing flags)
+      val_num <- ifelse(val_num < 0 | is.na(val_num), NA, val_num)
+      
+      # If ISCED is single-digit (0-8), convert to 3-digit (0-800)
+      ifelse(val_num >= 0 & val_num <= 8, val_num * 100, val_num)
+    }
+    
+    p$edu_var <- coalesce(safe_edu(p, "pe041"), safe_edu(p, "pe040"), safe_edu(p, "pe040_val"))
+    p$pl080_val <- get_col(p, "pl080")
+    
+    p$pl070_val <- get_col(p, "pl070")
+    if (all(is.na(p$pl070_val))) p$pl070_val <- rowSums(cbind(get_col(p, "pl073"), get_col(p, "pl075")), na.rm=TRUE)
+    
+    p$pl072_val <- get_col(p, "pl072")
+    if (all(is.na(p$pl072_val))) p$pl072_val <- rowSums(cbind(get_col(p, "pl074"), get_col(p, "pl076")), na.rm=TRUE)
+    
+    # Calculate personal pensions BEFORE group_by!
+    p_with_hid <- p %>% left_join(r %>% select(rb030, hid), by=c("pb030"="rb030")) %>%
+      mutate(
+        py100_val = coalesce(get_col(., "py100g"), get_col(., "py100n"), 0),
+        py110_val = coalesce(get_col(., "py110g"), get_col(., "py110n"), 0)
+      )
+    
+    p_pens <- p_with_hid %>% filter(!is.na(hid)) %>% group_by(hid) %>% 
+      summarise(pens_hh = sum(py100_val + py110_val, na.rm=TRUE), .groups="drop")
+    
+    # --- LWI & UNEMPLOYMENT ---
+    month_cols_211 <- intersect(paste0("pl211", letters[1:12]), names(p))
+    has_data_211 <- length(month_cols_211) == 12 && sum(as_num(p[[month_cols_211[1]]]) %in% 1:5, na.rm = TRUE) > 50
+    has_data_pl070 <- !all(is.na(p$pl070_val)) || !all(is.na(p$pl080_val))
+    
+    p_work <- p_with_hid %>% left_join(r %>% select(rb030, age, w_ind), by=c("pb030"="rb030"))
+    
+    if (has_data_211) {
+      p_lwi <- p_work %>% filter(age >= 18 & age <= 59) %>% mutate(is_student = ifelse(age >= 18 & age <= 24 & !is.na(pl031_val) & pl031_val == 3, 1, 0)) %>% filter(is_student == 0)
+      p_lwi$act_m <- rowSums(sapply(p_lwi[month_cols_211], function(x) as_num(x) %in% c(1,2,3,4)), na.rm=T)
+      lwi_hh <- p_lwi %>% group_by(hid) %>% summarise(act_hh = sum(act_m, na.rm=T), pot_hh = n() * 12, .groups="drop") %>% mutate(lwi_val = ifelse(pot_hh > 0 & is.finite(act_hh / pot_hh), act_hh / pot_hh, NA))
+      
+      p_unemp <- p_work %>% filter(age >= 15 & age <= 74)
+      p_unemp$u_m <- rowSums(sapply(p_unemp[month_cols_211], function(x) as_num(x) == 5), na.rm=T)
+      p_unemp$lf_m <- rowSums(sapply(p_unemp[month_cols_211], function(x) as_num(x) %in% 1:5), na.rm=T)
+      p_unemp <- p_unemp %>% filter(lf_m > 0) %>% mutate(u_rate_ind = u_m / lf_m)
+      
+      u_rate_val <- ifelse(sum(p_unemp$w_ind[!is.na(p_unemp$u_rate_ind)], na.rm = TRUE) > 0, 
+                           (sum(p_unemp$u_rate_ind * p_unemp$w_ind, na.rm = TRUE) / sum(p_unemp$w_ind[!is.na(p_unemp$u_rate_ind)], na.rm = TRUE)) * 100, NA)
+      
+    } else if (has_data_pl070) {
+      p_lwi <- p_work %>% filter(age >= 18 & age <= 59) %>% mutate(is_student = ifelse(age >= 18 & age <= 24 & !is.na(pl031_val) & pl031_val == 3, 1, 0)) %>% filter(is_student == 0)
+      p_lwi$act_m <- pmin(12, rowSums(cbind(coalesce(p_lwi$pl070_val, 0), coalesce(p_lwi$pl072_val, 0)), na.rm=TRUE))
+      lwi_hh <- p_lwi %>% group_by(hid) %>% summarise(act_hh = sum(act_m, na.rm=T), pot_hh = n() * 12, .groups="drop") %>% mutate(lwi_val = ifelse(pot_hh > 0 & is.finite(act_hh / pot_hh), act_hh / pot_hh, NA))
+      
+      p_unemp <- p_work %>% filter(age >= 15 & age <= 74)
+      p_unemp$u_m <- coalesce(p_unemp$pl080_val, 0)
+      p_unemp$act_m <- pmin(12, rowSums(cbind(coalesce(p_unemp$pl070_val, 0), coalesce(p_unemp$pl072_val, 0)), na.rm=TRUE))
+      p_unemp$lf_m <- pmin(12, p_unemp$u_m + p_unemp$act_m)
+      p_unemp <- p_unemp %>% filter(lf_m > 0) %>% mutate(u_rate_ind = u_m / lf_m)
+      
+      u_rate_val <- ifelse(sum(p_unemp$w_ind[!is.na(p_unemp$u_rate_ind)], na.rm = TRUE) > 0, 
+                           (sum(p_unemp$u_rate_ind * p_unemp$w_ind, na.rm = TRUE) / sum(p_unemp$w_ind[!is.na(p_unemp$u_rate_ind)], na.rm = TRUE)) * 100, NA)
+      
+    } else {
+      lwi_hh <- data.frame(hid = unique(r$hid), lwi_val = NA)
+      u_rate_val <- NA
+    }
+    
+    
+    # --- TERT & LWI CALCULATIONS ---
+    df_tert <- p_work %>% filter(age >= 25 & age <= 64, !is.na(w_ind), w_ind > 0)
+    
+    if(nrow(df_tert) > 0) {
+      df_tert <- df_tert %>%
+        mutate(
+          edu_clean = as.numeric(edu_var),
+          # Check works perfectly because 5s became 500, but it covers every other format as well
+          is_tert = ifelse(is.na(edu_clean), NA, 
+                           ifelse(edu_clean %in% c(5,6,7,8, 50,60,70,80) | edu_clean >= 500, 1, 0))
+        )
+      
+      valid_weights <- sum(df_tert$w_ind[!is.na(df_tert$is_tert)], na.rm = TRUE)
+      
+      if(valid_weights > 0) {
+        tert_rate <- (sum(df_tert$is_tert * df_tert$w_ind, na.rm = TRUE) / valid_weights) * 100
+      } else {
+        tert_rate <- NA
+      }
+    } else {
+      tert_rate <- NA
+    }
+    
+    # --- MERGE FOR THE REST ---
+    final <- r %>% left_join(h_final, by="hid") %>% left_join(p_pens, by="hid") %>% left_join(lwi_hh, by="hid")
+    
+    # --- CALCULATE LWI ---
+    df_lwi <- final %>% filter(age < 60, !is.na(w_ind), w_ind > 0, !is.na(lwi_val))
+    
+    if(nrow(df_lwi) > 0) {
+      df_lwi <- df_lwi %>% mutate(is_lwi = ifelse(lwi_val < 0.20, 1, 0))
+      
+      valid_weights_lwi <- sum(df_lwi$w_ind, na.rm = TRUE)
+      if(valid_weights_lwi > 0) {
+        lwi_rate <- (sum(df_lwi$is_lwi * df_lwi$w_ind, na.rm = TRUE) / valid_weights_lwi) * 100
+      } else {
+        lwi_rate <- NA
+      }
+    } else {
+      lwi_rate <- NA
+    }
+    
+    # --- FINAL INDICATOR CALCULATIONS ---
+    med_inc <- weighted_median(final$hx090_val, final$w_ind)
+    arpt <- 0.6 * med_inc
+    
+    arpr_vec <- ifelse(!is.na(final$hx090_val) & final$hx090_val < arpt, 1, 0)
+    
+    arpr <- ifelse(sum(final$w_ind[!is.na(arpr_vec)], na.rm = TRUE) > 0, 
+                   (sum(arpr_vec * final$w_ind, na.rm = TRUE) / sum(final$w_ind[!is.na(arpr_vec)], na.rm = TRUE)) * 100, NA)
+    
+    gini <- gini_w(final$hx090_val, final$w_ind) * 100
+    s8020 <- calc_s80s20(final$hx090_val, final$w_ind)
+    
+    hh_only <- final[!duplicated(final$hid), ]
+    w_col <- if ("db090" %in% names(hh_only)) "db090" else if ("db090_val" %in% names(hh_only)) "db090_val" else if ("rb050_val" %in% names(hh_only)) "rb050_val" else "rb050"
+    loneP <- ifelse(sum(as_num(hh_only[[w_col]]), na.rm = TRUE) > 0, (sum(as_num(hh_only[[w_col]])[hh_only$hx060_val == 9], na.rm = TRUE) / sum(as_num(hh_only[[w_col]]), na.rm = TRUE)) * 100, NA)
+    
+    house <- ifelse(sum(final$w_ind[!is.na(final$h_over)], na.rm = TRUE) > 0, 
+                    (sum(final$h_over * final$w_ind, na.rm = TRUE) / sum(final$w_ind[!is.na(final$h_over)], na.rm = TRUE)) * 100, NA)
+    
+    heat <- ifelse(sum(final$w_ind[!is.na(final$heat_val)], na.rm = TRUE) > 0, 
+                   (sum(final$heat_val * final$w_ind, na.rm = TRUE) / sum(final$w_ind[!is.na(final$heat_val)], na.rm = TRUE)) * 100, NA)
+    
+    # Macroeconomic transfer rates (Ratio of Sums)
+    sum_inc <- sum(final$hy020_val * final$w_ind, na.rm = TRUE)
+    sum_pens <- sum(final$pens_hh * final$w_ind, na.rm = TRUE)
+    sum_socben <- sum(final$benefits * final$w_ind, na.rm = TRUE)
+    
+    pens <- ifelse(sum_inc > 0, (sum_pens / sum_inc) * 100, NA)
+    socben <- ifelse(sum_inc > 0, (sum_socben / sum_inc) * 100, NA)
+    
+    # --- SAVE TO LIST ---
+    res <- data.frame(
+      Country = cntry, Year = year, 
+      MedInc = round(med_inc, 0), ARPT = round(arpt, 0), ARPR = round(arpr, 1), 
+      Gini = round(gini, 1), S8020 = round(s8020, 2), LoneP = round(loneP, 1), 
+      LWI = round(lwi_rate, 1), Unemp = round(u_rate_val, 1), Tert = round(tert_rate, 1), 
+      House = round(house, 1), Heat = round(heat, 1), Pens = round(pens, 1), SocBen = round(socben, 1)
+    )
+    master_panel_list[[paste0(cntry, year)]] <- res
+    
+    cat(sprintf("  %d | MedInc:%.0f | ARPR:%.1f | Gini:%.1f | S8020:%.2f | LoneP:%.1f | LWI:%.1f | Tert:%.1f | Unemp:%.1f | House:%.1f | Pens:%.1f | SocBen:%.1f\n", 
+                year, res$MedInc, res$ARPR, res$Gini, res$S8020, res$LoneP, res$LWI, res$Tert, res$Unemp, res$House, res$Pens, res$SocBen))
+    
+    # --- MEMORY CLEANUP TO PREVENT R CRASHES ---
+    rm(h, r, p, h_final, p_with_hid, p_pens, final)
+    if (exists("lwi_hh")) rm(lwi_hh)
+    if (exists("p_work")) rm(p_work, p_lwi, p_unemp, df_tert, df_lwi)
+    gc()
+  }
+}
+
+# --- 3. FINAL EXPORT TO CSV ---
+final_panel <- bind_rows(master_panel_list)
+output_file <- paste0(base_path, "Thesis_Final_Panel_Dataset_Bulletproof.csv")
+write.csv2(final_panel, output_file, row.names = FALSE)
+cat("\n\nProcess Completed! File successfully exported to:\n", output_file, "\n")

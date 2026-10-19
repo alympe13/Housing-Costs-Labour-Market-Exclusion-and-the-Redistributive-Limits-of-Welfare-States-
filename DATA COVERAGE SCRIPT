@@ -1,0 +1,39 @@
+library(dplyr)
+library(stargazer)
+
+cat("\n========================================================\n")
+cat("        TABLE A2: DATA COVERAGE BY COUNTRY                \n")
+cat("========================================================\n")
+
+# 1. Define the path and read the correct dataset
+raw_data <- read.csv2("Thesis_Final_Panel_Dataset_Bulletproof.csv")
+
+# 2. Create the data coverage table
+coverage_df <- raw_data %>%
+  # Ensure Year is numeric to find Min/Max
+  mutate(Year = as.numeric(as.character(Year))) %>% 
+  group_by(Country) %>%
+  summarise(
+    Min_Year = min(Year, na.rm = TRUE),
+    Max_Year = max(Year, na.rm = TRUE),
+    `Total Years (T)` = n() # Count the number of observations per country
+  ) %>%
+  # Combine Min and Max into a single column, e.g., "2004 - 2024"
+  mutate(`Available Period` = paste(Min_Year, "-", Max_Year)) %>%
+  # Keep only the desired columns in the correct order
+  select(Country, `Available Period`, `Total Years (T)`) %>%
+  as.data.frame() # Stargazer requires a data.frame (not a tibble)
+
+# 3. Export the Table to Word
+out_tableA2_file <- paste0(base_path_in, "TableA2_DataCoverage.doc")
+
+stargazer(coverage_df, 
+          type = "html", 
+          out = out_tableA2_file,
+          summary = FALSE,      # Tell stargazer to print the raw data, not descriptive statistics
+          rownames = FALSE,     # Hide row numbers on the left
+          title = "Table A2: Data Coverage by Country (Unbalanced Panel)",
+          notes = "Notes: The table reports the available time period and the total number of yearly observations (T) per country included in the dataset.")
+
+cat("\n--------------------------------------------------------\n")
+cat("PERFECT! Table A2 (Data Coverage) was exported to:\n", out_tableA2_file, "\n")

@@ -1,0 +1,46 @@
+# ==============================================================================
+# ADDITIONAL DIAGNOSTICS: Hausman Test & VIF 
+# ==============================================================================
+
+library(plm)
+library(car)
+
+# Ensure pdata is loaded
+# raw_data <- read.csv2("Thesis_Final_Panel_Dataset_Bulletproof.csv")
+# pdata <- pdata.frame(raw_data, index = c("Country", "Year"))
+
+cat("\n========================================================\n")
+cat("  1. HAUSMAN TEST (Fixed vs Random Effects)\n")
+cat("========================================================\n")
+
+# Run Baseline Fixed Effects model
+fe_gini <- plm(Gini ~ lag(House, 1) + lag(Unemp, 1) + lag(SocBen, 1) + lag(Pens, 1) + 
+                 lag(Tert, 1) + lag(LoneP, 1) + lag(Heat, 1) + lag(LWI, 1), 
+               data = pdata, model = "within", effect = "individual")
+
+# Run Random Effects model for comparison
+re_gini <- plm(Gini ~ lag(House, 1) + lag(Unemp, 1) + lag(SocBen, 1) + lag(Pens, 1) + 
+                 lag(Tert, 1) + lag(LoneP, 1) + lag(Heat, 1) + lag(LWI, 1), 
+               data = pdata, model = "random")
+
+hausman_test <- phtest(fe_gini, re_gini)
+print(hausman_test)
+
+if(hausman_test$p.value < 0.05) {
+  cat("\n-> p-value < 0.05. Random Effects model is REJECTED.\n")
+  cat("-> The Fixed Effects specification used in the study is the CONSISTENT and CORRECT choice.\n")
+}
+
+cat("\n========================================================\n")
+cat("  2. VARIANCE INFLATION FACTOR (VIF) - Multicollinearity Check\n")
+cat("========================================================\n")
+
+# Run a pooled OLS model with the same variables to calculate VIF
+pooled_model <- lm(Gini ~ House + Unemp + SocBen + Pens + Tert + LoneP + Heat + LWI, data = pdata)
+
+vif_values <- vif(pooled_model)
+print(vif_values)
+
+if(max(vif_values) < 5) {
+  cat("\n-> EXCELLENT: All VIF values are well below the threshold of 5. No severe multicollinearity detected.\n")
+}
