@@ -29,6 +29,7 @@ The repository/folder contains the following scripts, structured in logical orde
 
 ### C. Diagnostics & Robustness Checks (Requested during Peer Review)
 * **`Robustness_Time_Effects_Script.R`**: Estimates the two-ways fixed effects models (incorporating country and year dummies) to control for EU-wide macroeconomic shocks, automatically exporting Table A3.
+* **Diagnostics_Econometric_Tests.R**: Executes formal diagnostic tests for cross-sectional dependence (Pesaran CD), heteroskedasticity (Breusch-Pagan), and serial correlation (Breusch-Godfrey).
 * **`Diagnostics_Hausman_VIF.R`**: Executes the Hausman specification test (justifying the fixed-effects approach over random-effects) and calculates the Variance Inflation Factor (VIF) to rule out multicollinearity.
 * **`Robustness_Failed_System_GMM.R`**: Provided for absolute transparency. This script contains the initially attempted two-step System GMM dynamic panel model, which was ultimately abandoned (as noted in the manuscript's Limitations) due to severe instrument proliferation.
 

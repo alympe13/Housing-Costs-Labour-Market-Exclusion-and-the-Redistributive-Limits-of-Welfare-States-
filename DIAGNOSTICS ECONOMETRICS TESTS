@@ -1,0 +1,40 @@
+# ==============================================================================
+# DIAGNOSTIC TESTS SCRIPT: Heteroskedasticity, Serial Correlation, & CD Test
+# ==============================================================================
+
+library(plm)
+library(lmtest)
+
+# Prerequisite: Ensure pdata and baseline models (fe_gini, fe_s8020) are loaded
+
+cat("\n========================================================\n")
+cat("            DIAGNOSTIC TESTS (PANEL DATA)\n")
+cat("========================================================\n")
+
+# 1. Pesaran CD Test for Cross-Sectional Dependence
+# If p < 0.05, cross-sectional dependence is present (motivates Two-Ways FE)
+cat("\n--- Pesaran CD Test (Gini) ---\n")
+print(pcdtest(fe_gini, test = "cd"))
+
+cat("\n--- Pesaran CD Test (S8020) ---\n")
+print(pcdtest(fe_s8020, test = "cd"))
+
+
+# 2. Breusch-Pagan Test for Heteroskedasticity
+# If p < 0.05, heteroskedasticity is present -> Justifies Robust Standard Errors
+cat("\n--- Breusch-Pagan Test (Gini) ---\n")
+print(bptest(fe_gini))
+
+cat("\n--- Breusch-Pagan Test (S8020) ---\n")
+print(bptest(fe_s8020))
+
+
+# 3. Breusch-Godfrey / Wooldridge Test for Serial Correlation
+# If p < 0.05, serial correlation is present -> Justifies Arellano Clustered SEs
+cat("\n--- Breusch-Godfrey Test (Gini) ---\n")
+print(pbgtest(fe_gini))
+
+cat("\n--- Breusch-Godfrey Test (S8020) ---\n")
+print(pbgtest(fe_s8020))
+
+cat("\n========================================================\n")
