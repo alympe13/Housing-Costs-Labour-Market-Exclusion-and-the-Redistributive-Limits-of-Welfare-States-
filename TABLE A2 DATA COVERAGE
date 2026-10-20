@@ -1,0 +1,41 @@
+# ==============================================================================
+# DATA COVERAGE SCRIPT: Table A2 Generation
+# ==============================================================================
+
+library(dplyr)
+library(stargazer)
+
+cat("\n========================================================\n")
+cat("          TABLE A2: DATA COVERAGE BY COUNTRY            \n")
+cat("========================================================\n")
+
+# 1. Load the dataset using a RELATIVE path
+raw_data <- read.csv2("Thesis_Final_Panel_Dataset_Bulletproof.csv", stringsAsFactors = FALSE)
+
+# 2. Create the Data Coverage summary dataframe
+coverage_df <- raw_data %>%
+  mutate(Year = as.numeric(as.character(Year))) %>% 
+  group_by(Country) %>%
+  summarise(
+    Min_Year = min(Year, na.rm = TRUE),
+    Max_Year = max(Year, na.rm = TRUE),
+    `Total Years (T)` = n()
+  ) %>%
+  mutate(`Available Period` = paste(Min_Year, "-", Max_Year)) %>%
+  select(Country, `Available Period`, `Total Years (T)`) %>%
+  as.data.frame()
+
+# 3. Export directly to the working directory (NO absolute paths)
+out_tableA2_file <- "TableA2_DataCoverage.doc"
+
+stargazer(coverage_df, 
+          type = "html", 
+          out = out_tableA2_file,
+          summary = FALSE,      
+          rownames = FALSE,     
+          title = "Table A2: Data Coverage by Country",
+          notes = "Notes: The table reports the available time period and the total number of yearly observations (T) per country included in the dataset.")
+
+cat("\n--------------------------------------------------------\n")
+cat(" SUCCESS: Table A2 successfully exported to:", out_tableA2_file, "\n")
+cat("--------------------------------------------------------\n")
