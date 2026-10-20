@@ -1,0 +1,57 @@
+# ==============================================================================
+# DESCRIPTIVE STATISTICS SCRIPT: Table 1 Generation
+# ==============================================================================
+
+library(stargazer)
+library(dplyr)
+library(plm)
+
+cat("\n========================================================\n")
+cat("           TABLE 1: SUMMARY STATISTICS (DESCRIPTIVES)     \n")
+cat("========================================================\n")
+
+# 1. Load the dataset using a RELATIVE path (essential for reproducibility)
+raw_data <- read.csv2("Thesis_Final_Panel_Dataset_Bulletproof.csv", stringsAsFactors = FALSE)
+
+# Convert to data.frame and make column names lowercase for matching
+desc_data_raw <- as.data.frame(raw_data)
+colnames(desc_data_raw) <- tolower(colnames(desc_data_raw))
+
+# Define variables for the table
+vars_for_table <- c("gini", "s8020", "house", "unemp", "socben", 
+                    "pens", "tert", "lonep", "heat", "lwi")
+
+# Ensure all selected variables are strictly numeric (handling comma decimals if needed)
+for(col in vars_for_table) {
+  if(is.character(desc_data_raw[[col]])) {
+    desc_data_raw[[col]] <- as.numeric(gsub(",", ".", desc_data_raw[[col]]))
+  }
+}
+
+# 2. Filter and keep only the necessary columns
+desc_data <- desc_data_raw %>%
+  select(all_of(vars_for_table))
+
+# 3. Export directly to the working directory
+out_table1_file <- "Table1_SummaryStatistics.doc"
+
+stargazer(desc_data, 
+          type = "html", 
+          out = out_table1_file,
+          title = "Table 1: Summary Statistics of Variables",
+          digits = 2, 
+          summary.stat = c("n", "mean", "sd", "min", "max"),
+          covariate.labels = c("Gini Index", 
+                               "S80/20 Ratio", 
+                               "Housing Cost Overburden (%)", 
+                               "Unemployment Rate (%)", 
+                               "Social Benefits (excl. pensions) (%)", 
+                               "Pensions (%)", 
+                               "Tertiary Education (%)", 
+                               "Lone-Parent Households (%)", 
+                               "Heating Deprivation (%)", 
+                               "Low Work Intensity (%)"))
+
+cat("\n--------------------------------------------------------\n")
+cat(" SUCCESS: Table 1 successfully exported to:", out_table1_file, "\n")
+cat("--------------------------------------------------------\n")
