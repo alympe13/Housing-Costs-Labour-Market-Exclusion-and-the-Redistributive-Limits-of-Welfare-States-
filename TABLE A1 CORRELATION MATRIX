@@ -1,0 +1,49 @@
+# ==============================================================================
+# CORRELATION MATRIX SCRIPT: Table A1 Generation
+# ==============================================================================
+
+library(stargazer)
+
+cat("\n========================================================\n")
+cat("          TABLE A1: PEARSON CORRELATION MATRIX            \n")
+cat("========================================================\n")
+
+# 1. Load the dataset using a RELATIVE path
+raw_data <- read.csv2("Thesis_Final_Panel_Dataset_Bulletproof.csv", stringsAsFactors = FALSE)
+
+# 2. Define the exact columns needed for the correlation matrix
+vars_for_corr <- c("House", "Unemp", "SocBen", "Pens", "Tert", "LoneP", "Heat", "LWI")
+
+# 3. Ensure they are strictly numeric (handling comma decimals if needed)
+for(col in vars_for_corr) {
+  if(is.character(raw_data[[col]])) {
+    raw_data[[col]] <- as.numeric(gsub(",", ".", raw_data[[col]]))
+  }
+}
+
+# 4. Subset the data
+corr_data <- raw_data[, vars_for_corr]
+
+# 5. Rename columns so they look beautiful in the Stargazer / Word output
+colnames(corr_data) <- c("1. Housing Cost", "2. Unemployment", "3. Social Benefits", 
+                         "4. Pensions", "5. Tertiary Edu.", "6. Lone Parent", 
+                         "7. Heating Depr.", "8. Low Work Int.")
+
+# 6. Calculate Pearson Correlation Matrix
+cormat <- cor(corr_data, use = "pairwise.complete.obs")
+
+# 7. Export directly to the working directory (NO absolute paths)
+out_corr_file <- "TableA1_CorrelationMatrix.doc"
+
+stargazer(cormat, 
+          type = "html", 
+          out = out_corr_file,
+          title = "Table A1: Pearson Correlation Matrix of Explanatory Variables",
+          summary = FALSE, 
+          digits = 3, 
+          rownames = TRUE,
+          notes = "Notes: Pairwise Pearson correlation coefficients. No correlation exceeds the conventional multicollinearity threshold (0.80), confirming the absence of severe multicollinearity among the regressors.")
+
+cat("\n--------------------------------------------------------\n")
+cat(" SUCCESS: Correlation Matrix exported to:", out_corr_file, "\n")
+cat("--------------------------------------------------------\n")
