@@ -1,63 +1,63 @@
 # ==============================================================================
-# ECONOMETRIC ANALYSIS SCRIPT: Lagged Fixed-Effects with Arellano SEs
+# ECONOMETRIC ANALYSIS SCRIPT: Lagged Fixed-Effects, Arellano SEs & Table Export
 # ==============================================================================
 
-library(lmtest)
 library(plm)
+library(lmtest)
+library(sandwich)
+library(stargazer)
 
-# 1. FINAL MODEL FOR GINI (With a 1-year lag for all independent variables)
-fe_gini <- plm(Gini ~ lag(House, 1) + lag(Unemp, 1) + lag(SocBen, 1) + lag(Pens, 1) + 
-                 lag(Tert, 1) + lag(LoneP, 1) + lag(Heat, 1) + lag(LWI, 1), 
-               data = pdata, model = "within", effect = "individual")
+# 1. Load dataset and create panel object
+raw_data <- read.csv2("Thesis_Final_Panel_Dataset_Bulletproof.csv", stringsAsFactors = FALSE)
 
-# Apply Arellano clustered standard errors (robust to heteroskedasticity and serial correlation)
-final_gini <- coeftest(fe_gini, vcov = vcovHC(fe_gini, method = "arellano", cluster = "group"))
+numeric_cols <- c("MedInc", "ARPT", "ARPR", "Gini", "S8020", "LoneP", "LWI", "Unemp", "Tert", "House", "Heat", "Pens", "SocBen")
+for(col in numeric_cols) {
+  if(is.character(raw_data[[col]])) {
+    raw_data[[col]] <- as.numeric(gsub(",", ".", raw_data[[col]]))
+  }
+}
+pdata <- pdata.frame(raw_data, index = c("Country", "Year"))
 
-cat("\n========================================================\n")
-cat("      FINAL REGRESSION RESULTS: GINI (LAGGED FIXED EFFECTS)\n")
-cat("========================================================\n")
-print(final_gini)
-
-cat("\n--- Within R-Squared for the GINI model ---\n")
-print(summary(fe_gini)$r.squared)
-
-
-# 2. FINAL MODEL FOR S80/20 (With a 1-year lag for all independent variables)
+# 2. Estimate Fixed Effects models (1-year lagged independent variables)
 fe_s8020 <- plm(S8020 ~ lag(House, 1) + lag(Unemp, 1) + lag(SocBen, 1) + lag(Pens, 1) + 
                   lag(Tert, 1) + lag(LoneP, 1) + lag(Heat, 1) + lag(LWI, 1), 
                 data = pdata, model = "within", effect = "individual")
 
-# Apply Arellano clustered standard errors
-final_s8020 <- coeftest(fe_s8020, vcov = vcovHC(fe_s8020, method = "arellano", cluster = "group"))
+fe_gini <- plm(Gini ~ lag(House, 1) + lag(Unemp, 1) + lag(SocBen, 1) + lag(Pens, 1) + 
+                 lag(Tert, 1) + lag(LoneP, 1) + lag(Heat, 1) + lag(LWI, 1), 
+               data = pdata, model = "within", effect = "individual")
+
+# 3. Calculate Arellano Clustered Standard Errors and P-values
+cov_s8020 <- vcovHC(fe_s8020, type = "HC1", cluster = "group")
+cov_gini  <- vcovHC(fe_gini, type = "HC1", cluster = "group")
+
+se_s8020  <- sqrt(diag(cov_s8020))
+se_gini   <- sqrt(diag(cov_gini))
+
+p_s8020   <- coeftest(fe_s8020, vcov = cov_s8020)[, 4]
+p_gini    <- coeftest(fe_gini, vcov = cov_gini)[, 4]
+
+# 4. Export Table 2 using Stargazer (Labels ordered strictly to match plm formula)
+stargazer(fe_s8020, fe_gini,
+          type = "html", 
+          out = "Table2_Final_Results.doc",
+          se = list(se_s8020, se_gini),
+          p = list(p_s8020, p_gini),
+          title = "Table 2: Country Fixed Effects with Temporally Lagged Independent Variables (t-1)",
+          dep.var.labels = c("S80/S20 Ratio", "Gini Coefficient"),
+          covariate.labels = c("Housing Cost Overburden (t-1)",
+                               "Unemployment Rate (t-1)",
+                               "Social Benefits (t-1)",
+                               "Pensions (t-1)",
+                               "Tertiary Education (t-1)",
+                               "Lone-Parent Households (t-1)",
+                               "Heating Deprivation (t-1)",
+                               "Low Work Intensity (t-1)"),
+          model.names = FALSE,
+          keep.stat = c("n", "rsq"),
+          notes = "Note: Arellano robust standard errors clustered at the country level are reported in parentheses. *p < 0.10, **p < 0.05, ***p < 0.01.",
+          no.space = TRUE)
 
 cat("\n========================================================\n")
-cat("      FINAL REGRESSION RESULTS: S8020 (LAGGED FIXED EFFECTS)\n")
+cat(" SUCCESS: Table 2 exported successfully to Table2_Final_Results.doc\n")
 cat("========================================================\n")
-print(final_s8020)
-
-cat("\n--- Within R-Squared for the S8020 model ---\n")
-print(summary(fe_s8020)$r.squared)
-
-library(lmtest)
-library(sandwich)
-
-cat("\n========================================================\n")
-cat("    FINAL RESULTS WITH ARELLANO CLUSTERED STANDARD ERRORS\n")
-cat("========================================================\n")
-
-# 1. Model for Gini (Fixed Effects)
-form_gini <- as.formula(paste("Gini ~", indep_vars))
-model_gini <- plm(form_gini, data = pdata, model = "within", effect = "individual")
-
-cat("\n--- DEPENDENT VARIABLE: Gini (Country FE + Arellano SEs) ---\n")
-# vcovHC with cluster = "group" applies the Arellano estimator (robust to heteroskedasticity & serial correlation)
-print(coeftest(model_gini, vcov = vcovHC(model_gini, type = "HC1", cluster = "group")))
-
-# 2. Model for S80/20 (Fixed Effects)
-form_s8020 <- as.formula(paste("S8020 ~", indep_vars))
-model_s8020 <- plm(form_s8020, data = pdata, model = "within", effect = "individual")
-
-cat("\n--- DEPENDENT VARIABLE: S8020 (Country FE + Arellano SEs) ---\n")
-print(coeftest(model_s8020, vcov = vcovHC(model_s8020, type = "HC1", cluster = "group")))
-
-cat("\n========================================================\n")
