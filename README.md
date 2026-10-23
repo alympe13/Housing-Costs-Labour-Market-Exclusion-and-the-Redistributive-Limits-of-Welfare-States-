@@ -12,36 +12,37 @@ However, to facilitate full reproducible research, we provide the custom, bottom
 
 ## 3. Software Requirements
 The code was written and tested in **R**. To execute the scripts seamlessly, please ensure the following R packages are installed:
-* Data Manipulation: `dplyr`, `tidyr`, `stringr`, `data.table`
-* API & Validation: `eurostat`
-* Econometrics: `plm`, `lmtest`, `sandwich`, `car`
-* Output & Formatting: `stargazer`
+- Data Manipulation: `dplyr`, `tidyr`, `stringr`, `data.table`
+- API & Validation: `eurostat`
+- Econometrics: `plm`, `lmtest`, `sandwich`, `car`
+- Output & Formatting: `stargazer`
 
 ## 4. File Manifest
-The repository/folder contains the following scripts, structured in logical order of execution:
+The repository contains the following scripts, structured in logical order of execution:
 
 ### A. Data Construction & Validation
-* **`Data_Aggregation_Pipeline.R`**: The master script that processes the raw EU-SILC microdata. It applies necessary patches (e.g., Malta SDC age categorisations), standardises variables, and applies cross-sectional weights to construct the national macro-aggregates.
-* **`Eurostat_Validation_Script.R`**: An automated validation script that queries the official Eurostat API to download official macro-aggregates and calculates the Mean Absolute Error (MAE) against our constructed dataset.
+- **`EUSILC DATABASE ALL YEARS`**: The master script that processes the raw EU-SILC microdata. It applies necessary patches, standardises variables, and applies cross-sectional weights to construct the national macro-aggregates.
+- **`VERIFICATION EUROSTAT`**: An automated validation script that queries the official Eurostat API to download official macro-aggregates and calculates the Mean Absolute Error (MAE) against our constructed dataset.
 
-### B. Econometric Analysis
-* **`Econometric_Models_Script.R`**: Contains the baseline one-way fixed effects models with 1-year lagged independent variables. It applies Arellano clustered standard errors (robust to heteroskedasticity and serial correlation) using the `lmtest` and `sandwich` packages.
+### B. Summary Statistics & Main Econometric Analysis
+- **`TABLE 1 SUMMARY STATISTICS`**: Calculates and exports the summary statistics for the full unbalanced panel (Table 1).
+- **`ECONOMETRIC MODEL`**: Contains the baseline one-way fixed effects models with 1-year lagged independent variables. It applies Arellano clustered standard errors and directly exports Table 2.
 
 ### C. Diagnostics & Robustness Checks (Requested during Peer Review)
-* **`Robustness_Time_Effects_Script.R`**: Estimates the two-ways fixed effects models (incorporating country and year dummies) to control for EU-wide macroeconomic shocks, automatically exporting Table A3.
-* **Diagnostics_Econometric_Tests.R**: Executes formal diagnostic tests for cross-sectional dependence (Pesaran CD), heteroskedasticity (Breusch-Pagan), and serial correlation (Breusch-Godfrey).
-* **`Diagnostics_Hausman_VIF.R`**: Executes the Hausman specification test (justifying the fixed-effects approach over random-effects) and calculates the Variance Inflation Factor (VIF) to rule out multicollinearity.
-* **`Robustness_Failed_System_GMM.R`**: Provided for absolute transparency. This script contains the initially attempted two-step System GMM dynamic panel model, which was ultimately abandoned (as noted in the manuscript's Limitations) due to severe instrument proliferation.
+- **`DISCOLL KRAAY STANDARD ERRORS`**: Estimates the robustness check models using Driscoll-Kraay standard errors. This specification controls for cross-sectional dependence across European economies, robustly exporting Table A3.
+- **`DIAGNOSTICS ECONOMETRICS TESTS`**: Executes formal diagnostic tests for cross-sectional dependence (Pesaran CD), heteroskedasticity (Breusch-Pagan), and serial correlation (Breusch-Godfrey).
+- **`DIAGNOSTICS HAUSMAN VIFS`**: Executes the Hausman specification test and calculates the Variance Inflation Factor (VIF) to rule out multicollinearity.
+- **`ROBUSTNESS FAILED GMM`**: Provided for absolute transparency. This script contains the initially attempted two-step System GMM dynamic panel model, which was ultimately abandoned due to severe instrument proliferation.
 
-### D. Summary Statistics & Appendix Tables
-* **`Correlation_Matrix_Script.R`**: Generates and exports the Pearson Correlation Matrix (Table A1).
-* **`Data_Coverage_Script.R`**: Generates and exports the unbalanced panel coverage map per country (Table A2).
+### D. Appendix Tables
+- **`TABLE A1 CORRELATION MATRIX`**: Generates and exports the Pearson Correlation Matrix ensuring no pairwise correlation exceeds multicollinearity thresholds (Table A1).
+- **`TABLE A2 DATA COVERAGE`**: Generates and exports the unbalanced panel coverage map and observations (T) per country (Table A2).
 
 ## 5. Instructions for Use
-1. Save all `.R` scripts and the `Thesis_Final_Panel_Dataset_Bulletproof.csv` file in the same local directory.
+1. Save all scripts and the `Thesis_Final_Panel_Dataset_Bulletproof.csv` file in the same local directory.
 2. Set that directory as your Working Directory in R (`setwd("path/to/folder")`) or open the folder as an RStudio Project.
-3. You can execute any script from sections B, C, and D directly, as they all call the provided `.csv` dataset. 
-4. The tables (A1, A2, A3) will be automatically exported to your working directory as `.doc` files.
+3. You can execute any script from sections B, C, and D directly, as they seamlessly load the provided `.csv` dataset using relative paths.
+4. The tables (Table 1, Table 2, A1, A2, A3) will be automatically exported to your working directory as formatted `.doc` files.
 
 ## 6. Contact
 For any questions regarding the code or the dataset, please contact the corresponding author.
