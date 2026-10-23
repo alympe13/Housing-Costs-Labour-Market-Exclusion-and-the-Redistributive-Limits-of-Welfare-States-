@@ -1,0 +1,53 @@
+# ==============================================================================
+# ROBUSTNESS CHECK SCRIPT: Driscoll-Kraay Standard Errors
+# ==============================================================================
+
+library(plm)
+library(lmtest)
+library(stargazer)
+
+cat("\n========================================================\n")
+cat("  ROBUSTNESS CHECK: DRISCOLL-KRAAY STANDARD ERRORS\n")
+cat("========================================================\n")
+
+# 1. Load data (Full Sample)
+raw_data <- read.csv2("Thesis_Final_Panel_Dataset_Bulletproof.csv", stringsAsFactors = FALSE)
+numeric_cols <- c("MedInc", "ARPT", "ARPR", "Gini", "S8020", "LoneP", "LWI", "Unemp", "Tert", "House", "Heat", "Pens", "SocBen")
+for(col in numeric_cols) {
+  if(is.character(raw_data[[col]])) {
+    raw_data[[col]] <- as.numeric(gsub(",", ".", raw_data[[col]]))
+  }
+}
+pdata <- pdata.frame(raw_data, index = c("Country", "Year"))
+
+# 2. Baseline models (Country FE)
+fe_gini <- plm(Gini ~ lag(House, 1) + lag(Unemp, 1) + lag(SocBen, 1) + lag(Pens, 1) + 
+                 lag(Tert, 1) + lag(LoneP, 1) + lag(Heat, 1) + lag(LWI, 1), 
+               data = pdata, model = "within", effect = "individual")
+
+fe_s8020 <- plm(S8020 ~ lag(House, 1) + lag(Unemp, 1) + lag(SocBen, 1) + lag(Pens, 1) + 
+                  lag(Tert, 1) + lag(LoneP, 1) + lag(Heat, 1) + lag(LWI, 1), 
+                data = pdata, model = "within", effect = "individual")
+
+# 3. Apply Driscoll-Kraay Standard Errors (vcovSCC)
+robust_gini_dk <- coeftest(fe_gini, vcov = vcovSCC(fe_gini, type = "HC3", maxlag = 1))
+robust_s8020_dk <- coeftest(fe_s8020, vcov = vcovSCC(fe_s8020, type = "HC3", maxlag = 1))
+
+# 4. Export Table A3
+out_tableA3_file <- "TableA3_Robustness_DriscollKraay.doc"
+stargazer(fe_gini, fe_s8020,
+          type = "html",
+          out = out_tableA3_file,
+          title = "Table A3: Robustness Check - Spatial Correlation (Driscoll-Kraay SEs)",
+          column.labels = c("Gini Coefficient", "S80/S20 Ratio"),
+          dep.var.labels.include = FALSE,
+          se = list(robust_gini_dk[,2], robust_s8020_dk[,2]),
+          p = list(robust_gini_dk[,4], robust_s8020_dk[,4]),
+          covariate.labels = c("Housing Cost (t-1)", "Unemployment (t-1)", 
+                               "Social Benefits (t-1)", "Pensions (t-1)", 
+                               "Tertiary Edu. (t-1)", "Lone Parent (t-1)", 
+                               "Heating Depr. (t-1)", "Low Work Int. (t-1)"),
+          omit.stat = c("f", "ser"), 
+          notes = "Notes: Country Fixed Effects on the full sample. Driscoll-Kraay standard errors, robust to cross-sectional dependence and serial correlation, are reported in parentheses. *p < 0.10, **p < 0.05, ***p < 0.01.")
+
+cat("SUCCESS: Table A3 generated successfully!\n")
