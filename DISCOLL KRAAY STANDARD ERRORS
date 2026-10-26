@@ -1,16 +1,15 @@
 # ==============================================================================
-# ROBUSTNESS CHECK SCRIPT: Driscoll-Kraay Standard Errors
+# DIAGNOSTICS & ROBUSTNESS: Pesaran CD Tests, Two-Way FE, and Driscoll-Kraay SEs
 # ==============================================================================
 
 library(plm)
 library(lmtest)
+library(sandwich)
 library(stargazer)
 
 cat("\n========================================================\n")
-cat("  ROBUSTNESS CHECK: DRISCOLL-KRAAY STANDARD ERRORS\n")
+cat("  1. LOAD DATA\n")
 cat("========================================================\n")
-
-# 1. Load data (Full Sample)
 raw_data <- read.csv2("Thesis_Final_Panel_Dataset_Bulletproof.csv", stringsAsFactors = FALSE)
 numeric_cols <- c("MedInc", "ARPT", "ARPR", "Gini", "S8020", "LoneP", "LWI", "Unemp", "Tert", "House", "Heat", "Pens", "SocBen")
 for(col in numeric_cols) {
@@ -20,7 +19,10 @@ for(col in numeric_cols) {
 }
 pdata <- pdata.frame(raw_data, index = c("Country", "Year"))
 
-# 2. Baseline models (Country FE)
+
+cat("\n========================================================\n")
+cat("  2. ESTIMATE BASELINE MODELS (Country FE)\n")
+cat("========================================================\n")
 fe_gini <- plm(Gini ~ lag(House, 1) + lag(Unemp, 1) + lag(SocBen, 1) + lag(Pens, 1) + 
                  lag(Tert, 1) + lag(LoneP, 1) + lag(Heat, 1) + lag(LWI, 1), 
                data = pdata, model = "within", effect = "individual")
@@ -29,25 +31,84 @@ fe_s8020 <- plm(S8020 ~ lag(House, 1) + lag(Unemp, 1) + lag(SocBen, 1) + lag(Pen
                   lag(Tert, 1) + lag(LoneP, 1) + lag(Heat, 1) + lag(LWI, 1), 
                 data = pdata, model = "within", effect = "individual")
 
-# 3. Apply Driscoll-Kraay Standard Errors (vcovSCC)
-robust_gini_dk <- coeftest(fe_gini, vcov = vcovSCC(fe_gini, type = "HC3", maxlag = 1))
-robust_s8020_dk <- coeftest(fe_s8020, vcov = vcovSCC(fe_s8020, type = "HC3", maxlag = 1))
 
-# 4. Export Table A3
-out_tableA3_file <- "TableA3_Robustness_DriscollKraay.doc"
-stargazer(fe_gini, fe_s8020,
+cat("\n========================================================\n")
+cat("  3. ESTIMATE TWO-WAY FIXED EFFECTS (Country & Year FE)\n")
+cat("========================================================\n")
+twfe_gini <- plm(Gini ~ lag(House, 1) + lag(Unemp, 1) + lag(SocBen, 1) + lag(Pens, 1) + 
+                   lag(Tert, 1) + lag(LoneP, 1) + lag(Heat, 1) + lag(LWI, 1), 
+                 data = pdata, model = "within", effect = "twoways")
+
+twfe_s8020 <- plm(S8020 ~ lag(House, 1) + lag(Unemp, 1) + lag(SocBen, 1) + lag(Pens, 1) + 
+                    lag(Tert, 1) + lag(LoneP, 1) + lag(Heat, 1) + lag(LWI, 1), 
+                  data = pdata, model = "within", effect = "twoways")
+
+
+cat("\n========================================================\n")
+cat("  4. PESARAN CD TESTS: SUMMARY TABLE\n")
+cat("========================================================\n")
+cd_gini_fe   <- pcdtest(fe_gini, test = "cd")
+cd_s8020_fe  <- pcdtest(fe_s8020, test = "cd")
+cd_gini_twfe <- pcdtest(twfe_gini, test = "cd")
+cd_s8020_twfe <- pcdtest(twfe_s8020, test = "cd")
+
+cd_results <- data.frame(
+  Model = c("Gini: Country FE", "S80/S20: Country FE", "Gini: Two-way FE", "S80/S20: Two-way FE"),
+  CD_statistic = c(as.numeric(cd_gini_fe$statistic), as.numeric(cd_s8020_fe$statistic), as.numeric(cd_gini_twfe$statistic), as.numeric(cd_s8020_twfe$statistic)),
+  p_value = c(cd_gini_fe$p.value, cd_s8020_fe$p.value, cd_gini_twfe$p.value, cd_s8020_twfe$p.value)
+)
+print(cd_results, row.names = FALSE)
+
+
+cat("\n========================================================\n")
+cat("  5. SENSITIVITY ANALYSIS: DRISCOLL-KRAAY SEs (maxlag = 1, 2, 3)\n")
+cat("========================================================\n")
+
+# ---- maxlag = 1 ----
+cat("\n--- Gini Model (TWFE): maxlag = 1 ---\n")
+print(coeftest(twfe_gini, vcov. = function(x) vcovSCC(x, type = "HC1", maxlag = 1)))
+
+cat("\n--- S80/20 Model (TWFE): maxlag = 1 ---\n")
+print(coeftest(twfe_s8020, vcov. = function(x) vcovSCC(x, type = "HC1", maxlag = 1)))
+
+# ---- maxlag = 2 (Το βασικό που θα μπει στον Πίνακα A3) ----
+cat("\n--- Gini Model (TWFE): maxlag = 2 ---\n")
+robust_gini_twfe_DK2 <- coeftest(twfe_gini, vcov. = function(x) vcovSCC(x, type = "HC1", maxlag = 2))
+print(robust_gini_twfe_DK2)
+
+cat("\n--- S80/20 Model (TWFE): maxlag = 2 ---\n")
+robust_s8020_twfe_DK2 <- coeftest(twfe_s8020, vcov. = function(x) vcovSCC(x, type = "HC1", maxlag = 2))
+print(robust_s8020_twfe_DK2)
+
+# ---- maxlag = 3 ----
+cat("\n--- Gini Model (TWFE): maxlag = 3 ---\n")
+print(coeftest(twfe_gini, vcov. = function(x) vcovSCC(x, type = "HC1", maxlag = 3)))
+
+cat("\n--- S80/20 Model (TWFE): maxlag = 3 ---\n")
+print(coeftest(twfe_s8020, vcov. = function(x) vcovSCC(x, type = "HC1", maxlag = 3)))
+
+
+cat("\n========================================================\n")
+cat("  6. EXPORT TABLE A3 (TWFE with Driscoll-Kraay SEs, maxlag=2)\n")
+cat("========================================================\n")
+out_tableA3_file <- "TableA3_Robustness_TwoWay_DK.doc"
+
+stargazer(twfe_gini, twfe_s8020,
           type = "html",
           out = out_tableA3_file,
-          title = "Table A3: Robustness Check - Spatial Correlation (Driscoll-Kraay SEs)",
+          title = "Table A3: Robustness Check - Two-Way Fixed Effects with Driscoll-Kraay Standard Errors",
           column.labels = c("Gini Coefficient", "S80/S20 Ratio"),
           dep.var.labels.include = FALSE,
-          se = list(robust_gini_dk[,2], robust_s8020_dk[,2]),
-          p = list(robust_gini_dk[,4], robust_s8020_dk[,4]),
+          se = list(robust_gini_twfe_DK2[,2], robust_s8020_twfe_DK2[,2]),
+          p = list(robust_gini_twfe_DK2[,4], robust_s8020_twfe_DK2[,4]),
           covariate.labels = c("Housing Cost (t-1)", "Unemployment (t-1)", 
                                "Social Benefits (t-1)", "Pensions (t-1)", 
                                "Tertiary Edu. (t-1)", "Lone Parent (t-1)", 
                                "Heating Depr. (t-1)", "Low Work Int. (t-1)"),
           omit.stat = c("f", "ser"), 
-          notes = "Notes: Country Fixed Effects on the full sample. Driscoll-Kraay standard errors, robust to cross-sectional dependence and serial correlation, are reported in parentheses. *p < 0.10, **p < 0.05, ***p < 0.01.")
+          notes = c("Notes: All models include country and year fixed effects.", 
+                    "Driscoll-Kraay standard errors (maxlag=2) robust to cross-sectional and temporal dependence are reported in parentheses.", 
+                    "* p < 0.10, ** p < 0.05, *** p < 0.01."),
+          notes.append = FALSE)
 
-cat("SUCCESS: Table A3 generated successfully!\n")
+cat("\n SUCCESS: Table A3 (Two-Way FE + DK SEs) exported successfully to:", out_tableA3_file, "\n")
