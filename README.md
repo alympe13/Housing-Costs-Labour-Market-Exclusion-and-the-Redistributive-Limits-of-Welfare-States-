@@ -29,8 +29,8 @@ The repository contains the following scripts, structured in logical order of ex
 - **`ECONOMETRIC MODEL`**: Contains the baseline one-way fixed effects models with 1-year lagged independent variables. It applies Arellano clustered standard errors and directly exports Table 2.
 
 ### C. Diagnostics & Robustness Checks (Requested during Peer Review)
-- **`DISCOLL KRAAY STANDARD ERRORS`**: Estimates the robustness check models using Driscoll-Kraay standard errors. This specification controls for cross-sectional dependence across European economies, robustly exporting Table A3.
-- **`DIAGNOSTICS ECONOMETRICS TESTS`**: Executes formal diagnostic tests for cross-sectional dependence (Pesaran CD), heteroskedasticity (Breusch-Pagan), and serial correlation (Breusch-Godfrey).
+- **`DISCOLL KRAAY STANDARD ERRORS`**: Estimates the robustness check models using Two-Way Fixed Effects (Country & Year FE), executes Pesaran CD diagnostic tests, performs a sensitivity analysis on lag structures (`maxlag = 1, 2, 3`) for Driscoll-Kraay standard errors, and robustly exports Table A3.
+- **`DIAGNOSTICS ECONOMETRICS TESTS`**: Executes formal diagnostic tests for heteroskedasticity (Breusch-Pagan) and serial correlation (Breusch-Godfrey/Wooldridge).
 - **`DIAGNOSTICS HAUSMAN VIFS`**: Executes the Hausman specification test and calculates the Variance Inflation Factor (VIF) to rule out multicollinearity.
 - **`ROBUSTNESS FAILED GMM`**: Provided for absolute transparency. This script contains the initially attempted two-step System GMM dynamic panel model, which was ultimately abandoned due to severe instrument proliferation.
 
