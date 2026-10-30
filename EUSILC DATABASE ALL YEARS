@@ -55,7 +55,7 @@ calc_s80s20 <- function(x, w) {
 
 # --- 1. SETTINGS / CONFIGURATION ---
 countries <- c("AT", "BE", "BG", "CH", "CY","CZ", "DE", "DK", "EE", "EL", "ES", "FI", "FR", "HR", "HU", "IE", "IS", "IT", "LT", "LU", "LV", "MT", "NL", "NO", "PL", "PT", "RO", "RS", "SE", "SI", "SK", "UK") 
-base_path <- "C:/Users/alexi/OneDrive/Υπολογιστής/ΔΙΔΑΚΤΟΡΙΚΟ/Δεδομένα/Cross4/"
+base_path <- "./data/"
 years <- 2004:2024
 master_panel_list <- list()
 
